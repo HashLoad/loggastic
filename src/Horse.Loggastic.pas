@@ -24,8 +24,9 @@ begin
       except
         on E: Exception do
         begin
-          Log(AReq, ARes, E.Message);
-          raise e;
+          if not E.InheritsFrom(EHorseCallbackInterrupted) then
+            Log(AReq, ARes, E.Message);
+          raise;
         end;
       end;
     end;
