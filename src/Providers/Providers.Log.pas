@@ -259,7 +259,9 @@ begin
   FParams.AddPair('params', DictionaryToJsonObject(ARequest.Params));
   FParams.AddPair('headers', DictionaryToJsonObject(ARequest.Headers));
 
-  FBody := THorseHackRequest(ARequest).Body;
+  if FContentType = 'application/json' then
+    FBody := THorseHackRequest(ARequest).Body;
+
   FContentLength := FBody.Length;
 end;
 
@@ -300,13 +302,10 @@ begin
   FStatusCode := LHostResponse.GetWebResponse.StatusCode;
   FContentType := LHostResponse.GetWebResponse.ContentType;
 
-  LContentStream := TMemoryStream(LHostResponse.GetWebResponse.ContentStream);
-  if Assigned(LContentStream) then
-  begin
-    SetString(LBody, PAnsiChar(LContentStream.Memory), LContentStream.Size);
-    FBody := LBody;
-    FContentLength := LBody.Length;
-  end;
+  if FContentType = 'application/json' then
+    FBody := LHostResponse.GetWebResponse.Content;
+
+  FContentLength := LHostResponse.GetWebResponse.ContentLength;
 end;
 
 constructor TProviderLogResponse.Create(AStatusCode: integer; AError, ADescription: string);
