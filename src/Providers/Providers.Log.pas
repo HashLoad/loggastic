@@ -6,6 +6,8 @@ uses
   System.JSON, REST.JSON, System.Net.HTTPClientComponent, System.Threading, System.SysUtils, System.DateUtils, Horse,
   REST.Client, REST.Types, System.Generics.Collections;
 
+const
+  DATE_HEADER = '_@DATE';
 type
   TProviderLogResponse = class
   private
@@ -249,7 +251,7 @@ var
   LCount: integer;
   LBody: TJSONObject;
 begin
-  FDate := Now;
+  FDate := StrToDateTime(ARequest.Headers[DATE_HEADER]);
   FMethod := THorseHackRequest(ARequest).GetWebRequest.Method;
   FContentType := THorseHackRequest(ARequest).GetWebRequest.ContentType;
 

@@ -19,6 +19,7 @@ begin
   Result := procedure(AReq: THorseRequest; ARes: THorseResponse; ANext: TProc)
     begin
       try
+        AReq.Headers.AddOrSetValue(DATE_HEADER, DateTimeToStr(Now));
         ANext();
         Log(AReq, ARes);
       except
