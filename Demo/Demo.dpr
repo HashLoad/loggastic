@@ -15,6 +15,7 @@ var
 begin
   App := THorse.Create;
   try
+    //See output on https://ptsv2.com/t/39fiw-1573504844
     App.Use(Loggastic('https://ptsv2.com/t/39fiw-1573504844/post'));
 
     App.Get('/', procedure(Req: THorseRequest; Res: THorseResponse; Next: TProc)

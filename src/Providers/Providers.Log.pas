@@ -51,7 +51,7 @@ type
 
     function ToJSON: TJSONObject;
 
-    constructor Create(const ARequest: THorseRequest);
+    constructor Create(const ARequest: THorseRequest; AStartDate: TDateTime);
   end;
 
   TProviderLogGeneral = class
@@ -89,24 +89,33 @@ type
     procedure SendLog;
     function ToJSON: TJSONObject;
 
-    constructor Create(const ARequest: THorseRequest; const AResponse: THorseResponse); overload;
-    constructor Create(const ARequest: THorseRequest; const AResponse: THorseResponse; AError: string); overload;
+    constructor Create(const ARequest: THorseRequest; const AResponse: THorseResponse; AStartDate: TDateTime); overload;
+    constructor Create(const ARequest: THorseRequest; const AResponse: THorseResponse; AError: string; AStartDate: TDateTime); overload;
     destructor Destroy; override;
   end;
 
-procedure Log(const ARequest: THorseRequest; const AResponse: THorseResponse); overload;
+procedure Log(const ARequest: THorseRequest; const AResponse: THorseResponse; AStartDate: TDateTime); overload;
 
-procedure Log(const ARequest: THorseRequest; const AResponse: THorseResponse; AError: string); overload;
+procedure Log(const ARequest: THorseRequest; const AResponse: THorseResponse; AError: string; AStartDate: TDateTime); overload;
 
 implementation
 
-uses System.NetEncoding, System.Classes;
+uses System.NetEncoding, System.Classes, IdHTTPWebBrokerBridge,
+  IdHTTPHeaderInfo;
 
-procedure Log(const ARequest: THorseRequest; const AResponse: THorseResponse);
+type
+  TIdHTTPAppRequestHelper = class helper for TIdHTTPAppRequest
+  public
+    function GetRequestInfo: TIdEntityHeaderInfo;
+    function GetHeadersJSON: TJSONObject;
+  end;
+
+
+procedure Log(const ARequest: THorseRequest; const AResponse: THorseResponse; AStartDate: TDateTime);
 var
   LLog: TProviderLog;
 begin
-  LLog := TProviderLog.Create(ARequest, AResponse);
+  LLog := TProviderLog.Create(ARequest, AResponse, AStartDate);
   try
     LLog.SendLog;
   finally
@@ -114,11 +123,11 @@ begin
   end;
 end;
 
-procedure Log(const ARequest: THorseRequest; const AResponse: THorseResponse; AError: string); overload;
+procedure Log(const ARequest: THorseRequest; const AResponse: THorseResponse; AError: string; AStartDate: TDateTime); overload;
 var
   LLog: TProviderLog;
 begin
-  LLog := TProviderLog.Create(ARequest, AResponse, AError);
+  LLog := TProviderLog.Create(ARequest, AResponse, AError, AStartDate);
   try
     LLog.SendLog;
   finally
@@ -128,17 +137,17 @@ end;
 
 { TProviderLog }
 
-constructor TProviderLog.Create(const ARequest: THorseRequest; const AResponse: THorseResponse);
+constructor TProviderLog.Create(const ARequest: THorseRequest; const AResponse: THorseResponse; AStartDate: TDateTime);
 begin
   FGeneral := TProviderLogGeneral.Create(ARequest);
-  FRequest := TProviderLogRequest.Create(ARequest);
+  FRequest := TProviderLogRequest.Create(ARequest, AStartDate);
   FResponse := TProviderLogResponse.Create(AResponse);
 end;
 
-constructor TProviderLog.Create(const ARequest: THorseRequest; const AResponse: THorseResponse; AError: string);
+constructor TProviderLog.Create(const ARequest: THorseRequest; const AResponse: THorseResponse; AError: string; AStartDate: TDateTime);
 begin
   FGeneral := TProviderLogGeneral.Create(ARequest);
-  FRequest := TProviderLogRequest.Create(ARequest);
+  FRequest := TProviderLogRequest.Create(ARequest, AStartDate);
   FResponse := TProviderLogResponse.Create(AResponse.Status, AError, THorseHackResponse(AResponse)
     .GetWebResponse.Content);
 end;
@@ -211,7 +220,9 @@ var
 const
   JWT_PAYLOAD = 1;
 begin
-  if ARequest.Headers.TryGetValue('X-Authorization', LToken) then
+  LToken := ARequest.Headers['X-Authorization'];
+
+  if not LToken.IsEmpty then
   begin
     LToken := LToken.Replace('bearer ', '', [rfIgnoreCase]);
     LPayloadEncoded := LToken.Split(['.'])[JWT_PAYLOAD];
@@ -246,21 +257,22 @@ end;
 
 { TProviderLogRequest }
 
-constructor TProviderLogRequest.Create(const ARequest: THorseRequest);
+constructor TProviderLogRequest.Create(const ARequest: THorseRequest; AStartDate: TDateTime);
 var
-  LCount: integer;
-  LBody: TJSONObject;
+  LHackedRequest: THorseHackRequest;
 begin
-  FDate := StrToDateTime(ARequest.Headers[DATE_HEADER]);
+  FDate := AStartDate;
   FMethod := THorseHackRequest(ARequest).GetWebRequest.Method;
   FContentType := THorseHackRequest(ARequest).GetWebRequest.ContentType;
-
+  LHackedRequest := THorseHackRequest(ARequest);
   FParams := TJSONObject.Create;
 
   FParams.AddPair('querys', DictionaryToJsonObject(ARequest.Query));
   FParams.AddPair('params', DictionaryToJsonObject(ARequest.Params));
-  FParams.AddPair('headers', DictionaryToJsonObject(ARequest.Headers));
-
+  if LHackedRequest.GetWebRequest.inheritsfrom(TIdHTTPAppRequest) then
+  begin
+    FParams.AddPair('headers',  TIdHTTPAppRequest(LHackedRequest.GetWebRequest).GetHeadersJSON);
+  end;
   if FContentType = 'application/json' then
     FBody := THorseHackRequest(ARequest).Body;
 
@@ -294,8 +306,6 @@ end;
 constructor TProviderLogResponse.Create(const AResponse: THorseResponse);
 var
   LHostResponse: THorseHackResponse;
-  LBody: string;
-  LContentStream: TMemoryStream;
 begin
   LHostResponse := THorseHackResponse(AResponse);
 
@@ -339,6 +349,28 @@ begin
   Result.AddPair('contentType', FContentType);
   Result.AddPair('contentLength', TJSONNumber.Create(FContentLength));
   Result.AddPair('body', FBody);
+end;
+
+{ TIdHTTPAppRequestHelper }
+
+function TIdHTTPAppRequestHelper.GetHeadersJSON: TJSONObject;
+var
+  LKey, LValue, LHeader: string;
+  LPosSeparator: Integer;
+begin
+  Result := TJSONObject.Create;
+  for LHeader in GetRequestInfo.RawHeaders do
+  begin
+    LPosSeparator := Pos(':', LHeader);
+    LKey := Copy(LHeader, 0, LPosSeparator - 1);
+    LValue := Copy(LHeader, LPosSeparator + 1, LHeader.Length - LPosSeparator);
+    Result.AddPair(LowerCase(LKey), Trim(LValue));
+  end;
+end;
+
+function TIdHTTPAppRequestHelper.GetRequestInfo: TIdEntityHeaderInfo;
+begin
+  Result := FRequestInfo;
 end;
 
 end.

@@ -17,16 +17,18 @@ begin
   TProviderLog.ElasticSearchUrl := AElasticSearchUrl;
 
   Result := procedure(AReq: THorseRequest; ARes: THorseResponse; ANext: TProc)
+    var
+      LStartDate: TDateTime;
     begin
+      LStartDate := Now;
       try
-        AReq.Headers.AddOrSetValue(DATE_HEADER, DateTimeToStr(Now));
         ANext();
-        Log(AReq, ARes);
+        Log(AReq, ARes, LStartDate);
       except
         on E: Exception do
         begin
           if not E.InheritsFrom(EHorseCallbackInterrupted) then
-            Log(AReq, ARes, E.Message);
+            Log(AReq, ARes, E.Message, LStartDate);
           raise;
         end;
       end;
