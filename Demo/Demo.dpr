@@ -4,28 +4,19 @@ program Demo;
 {$R *.res}
 
 uses
-  System.SysUtils,
   Horse,
   Horse.Loggastic in '..\src\Horse.Loggastic.pas',
   Providers.Log in '..\src\Providers\Providers.Log.pas';
 
-var
-  App: THorse;
-
 begin
-  App := THorse.Create;
-  try
-    //See output on https://ptsv2.com/t/39fiw-1573504844
-    App.Use(Loggastic('https://ptsv2.com/t/39fiw-1573504844/post'));
+  //See output on https://ptsv2.com/t/39fiw-1573504844
+  THorse.Use(Loggastic('https://ptsv2.com/t/39fiw-1573504844/post'));
 
-    App.Get('/', procedure(Req: THorseRequest; Res: THorseResponse; Next: TProc)
+  THorse.Get('/',
+    procedure(Res: THorseResponse)
     begin
-      Res.Send('Hello')
+      Res.Send('Hello');
     end);
 
-    App.Start;
-
-  finally
-    App.Free;
-  end;
+  THorse.Listen;
 end.

@@ -2,15 +2,13 @@ unit Horse.Loggastic;
 
 interface
 
-uses
-  Horse, Providers.Log;
+uses Horse, Providers.Log;
 
 function Loggastic(AElasticSearchUrl: string): THorseCallback;
 
 implementation
 
-uses
-  System.SysUtils;
+uses System.SysUtils;
 
 function Loggastic(AElasticSearchUrl: string): THorseCallback;
 begin

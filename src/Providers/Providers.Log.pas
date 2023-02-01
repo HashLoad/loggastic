@@ -2,33 +2,31 @@ unit Providers.Log;
 
 interface
 
-uses
-  System.JSON, REST.JSON, System.Net.HTTPClientComponent, System.Threading, System.SysUtils, System.DateUtils, Horse,
+uses System.JSON, REST.JSON, System.Net.HTTPClientComponent, System.Threading, System.SysUtils, System.DateUtils, Horse,
   REST.Client, REST.Types, System.Generics.Collections;
 
 const
   DATE_HEADER = '_@DATE';
+
 type
   TProviderLogResponse = class
   private
     FBody: string;
     FDate: TDateTime;
     FReasonString: string;
-    FStatusCode: integer;
+    FStatusCode: Integer;
     FContentType: string;
-    FContentLength: integer;
+    FContentLength: Integer;
   public
     property Date: TDateTime read FDate write FDate;
     property ReasonString: string read FReasonString write FReasonString;
-    property StatusCode: integer read FStatusCode write FStatusCode;
+    property StatusCode: Integer read FStatusCode write FStatusCode;
     property ContentType: string read FContentType write FContentType;
-    property ContentLength: integer read FContentLength write FContentLength;
+    property ContentLength: Integer read FContentLength write FContentLength;
     property Body: string read FBody write FBody;
-
     function ToJSON: TJSONObject;
-
     constructor Create(const AResponse: THorseResponse); overload;
-    constructor Create(AStatusCode: integer; AError, ADescription: string); overload;
+    constructor Create(AStatusCode: Integer; AError, ADescription: string); overload;
   end;
 
   TProviderLogRequest = class
@@ -38,19 +36,16 @@ type
     FContentType: string;
     FParams: TJSONObject;
     FBody: string;
-    FContentLength: integer;
-
+    FContentLength: Integer;
     function DictionaryToJsonObject(ADictionary: TDictionary<string, string>): TJSONObject;
   public
     property Date: TDateTime read FDate write FDate;
     property Method: string read FMethod write FMethod;
     property ContentType: string read FContentType write FContentType;
-    property ContentLength: integer read FContentLength write FContentLength;
+    property ContentLength: Integer read FContentLength write FContentLength;
     property Params: TJSONObject read FParams write FParams;
     property Body: string read FBody write FBody;
-
     function ToJSON: TJSONObject;
-
     constructor Create(const ARequest: THorseRequest; AStartDate: TDateTime);
   end;
 
@@ -60,7 +55,6 @@ type
     FServerHost: string;
     FPathInfo: string;
     FSession: TJSONObject;
-
     procedure SetSession(const ARequest: THorseRequest);
   public
     property BasePath: string read FBasePath write FBasePath;
@@ -68,7 +62,6 @@ type
     property PathInfo: string read FPathInfo write FPathInfo;
     property Session: TJSONObject read FSession write FSession;
     function ToJSON: TJSONObject;
-
     constructor Create(const ARequest: THorseRequest);
   end;
 
@@ -85,23 +78,19 @@ type
     property General: TProviderLogGeneral read FGeneral write FGeneral;
     property Request: TProviderLogRequest read FRequest write FRequest;
     property Response: TProviderLogResponse read FResponse write FResponse;
-
     procedure SendLog;
     function ToJSON: TJSONObject;
-
     constructor Create(const ARequest: THorseRequest; const AResponse: THorseResponse; AStartDate: TDateTime); overload;
     constructor Create(const ARequest: THorseRequest; const AResponse: THorseResponse; AError: string; AStartDate: TDateTime); overload;
     destructor Destroy; override;
   end;
 
 procedure Log(const ARequest: THorseRequest; const AResponse: THorseResponse; AStartDate: TDateTime); overload;
-
 procedure Log(const ARequest: THorseRequest; const AResponse: THorseResponse; AError: string; AStartDate: TDateTime); overload;
 
 implementation
 
-uses System.NetEncoding, System.Classes, IdHTTPWebBrokerBridge,
-  IdHTTPHeaderInfo;
+uses System.NetEncoding, System.Classes, IdHTTPWebBrokerBridge, IdHTTPHeaderInfo;
 
 type
   TIdHTTPAppRequestHelper = class helper for TIdHTTPAppRequest
@@ -109,7 +98,6 @@ type
     function GetRequestInfo: TIdEntityHeaderInfo;
     function GetHeadersJSON: TJSONObject;
   end;
-
 
 procedure Log(const ARequest: THorseRequest; const AResponse: THorseResponse; AStartDate: TDateTime);
 var
@@ -148,8 +136,7 @@ constructor TProviderLog.Create(const ARequest: THorseRequest; const AResponse: 
 begin
   FGeneral := TProviderLogGeneral.Create(ARequest);
   FRequest := TProviderLogRequest.Create(ARequest, AStartDate);
-  FResponse := TProviderLogResponse.Create(AResponse.Status, AError, THorseHackResponse(AResponse)
-    .GetWebResponse.Content);
+  FResponse := TProviderLogResponse.Create(AResponse.Status, AError, AResponse.RawWebResponse.Content);
 end;
 
 destructor TProviderLog.Destroy;
@@ -203,6 +190,7 @@ begin
       except
       end;
     end);
+
   LTask.Start;
 end;
 
@@ -215,10 +203,10 @@ begin
 end;
 
 procedure TProviderLogGeneral.SetSession(const ARequest: THorseRequest);
-var
-  LPayloadEncoded, LPayloadDecoded, LToken: string;
 const
   JWT_PAYLOAD = 1;
+var
+  LPayloadEncoded, LPayloadDecoded, LToken: string;
 begin
   LToken := ARequest.Headers['X-Authorization'];
 
@@ -245,36 +233,30 @@ end;
 { TProviderLogGeneral }
 
 constructor TProviderLogGeneral.Create(const ARequest: THorseRequest);
-var
-  LHostRequest: THorseHackRequest;
 begin
-  LHostRequest := THorseHackRequest(ARequest);
-  FBasePath := LHostRequest.GetWebRequest.PathInfo;
-  FServerHost := LHostRequest.GetWebRequest.Host;
-  FPathInfo := LHostRequest.GetWebRequest.PathInfo;
+  FServerHost := ARequest.RawWebRequest.Host;
+  FBasePath := ARequest.RawWebRequest.PathInfo;
+  FPathInfo := ARequest.RawWebRequest.PathInfo;
   SetSession(ARequest);
 end;
 
 { TProviderLogRequest }
 
 constructor TProviderLogRequest.Create(const ARequest: THorseRequest; AStartDate: TDateTime);
-var
-  LHackedRequest: THorseHackRequest;
 begin
   FDate := AStartDate;
-  FMethod := THorseHackRequest(ARequest).GetWebRequest.Method;
-  FContentType := THorseHackRequest(ARequest).GetWebRequest.ContentType;
-  LHackedRequest := THorseHackRequest(ARequest);
+  FMethod := ARequest.RawWebRequest.Method;
+  FContentType := ARequest.RawWebRequest.ContentType;
   FParams := TJSONObject.Create;
 
-  FParams.AddPair('querys', DictionaryToJsonObject(ARequest.Query));
-  FParams.AddPair('params', DictionaryToJsonObject(ARequest.Params));
-  if LHackedRequest.GetWebRequest.inheritsfrom(TIdHTTPAppRequest) then
-  begin
-    FParams.AddPair('headers',  TIdHTTPAppRequest(LHackedRequest.GetWebRequest).GetHeadersJSON);
-  end;
+  FParams.AddPair('querys', DictionaryToJsonObject(ARequest.Query.Dictionary));
+  FParams.AddPair('params', DictionaryToJsonObject(ARequest.Params.Dictionary));
+
+  if ARequest.RawWebRequest.InheritsFrom(TIdHTTPAppRequest) then
+    FParams.AddPair('headers',  TIdHTTPAppRequest(ARequest.RawWebRequest).GetHeadersJSON);
+
   if FContentType = 'application/json' then
-    FBody := THorseHackRequest(ARequest).Body;
+    FBody := ARequest.Body;
 
   FContentLength := FBody.Length;
 end;
@@ -285,9 +267,7 @@ var
 begin
   Result := TJSONObject.Create;
   for LPair in ADictionary do
-  begin
-    Result.AddPair(LPair.Key, LPair.Value)
-  end;
+    Result.AddPair(LPair.Key, LPair.Value);
 end;
 
 function TProviderLogRequest.ToJSON: TJSONObject;
@@ -304,23 +284,19 @@ end;
 { TProviderLogResponse }
 
 constructor TProviderLogResponse.Create(const AResponse: THorseResponse);
-var
-  LHostResponse: THorseHackResponse;
 begin
-  LHostResponse := THorseHackResponse(AResponse);
-
   FDate := Now;
-  FReasonString := LHostResponse.GetWebResponse.ReasonString;
-  FStatusCode := LHostResponse.GetWebResponse.StatusCode;
-  FContentType := LHostResponse.GetWebResponse.ContentType;
+  FReasonString := AResponse.RawWebResponse.ReasonString;
+  FStatusCode := AResponse.RawWebResponse.StatusCode;
+  FContentType := AResponse.RawWebResponse.ContentType;
 
   if FContentType = 'application/json' then
-    FBody := LHostResponse.GetWebResponse.Content;
+    FBody := AResponse.RawWebResponse.Content;
 
-  FContentLength := LHostResponse.GetWebResponse.ContentLength;
+  FContentLength := AResponse.RawWebResponse.ContentLength;
 end;
 
-constructor TProviderLogResponse.Create(AStatusCode: integer; AError, ADescription: string);
+constructor TProviderLogResponse.Create(AStatusCode: Integer; AError, ADescription: string);
 var
   LBody: TJSONObject;
 begin
